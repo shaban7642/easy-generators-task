@@ -1,17 +1,10 @@
-import {
-  ConflictException,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model } from 'mongoose';
 import { User } from './schemas/user.schema';
 
-import * as bcrypt from 'bcryptjs';
 import { JwtService } from '@nestjs/jwt';
 import { SignUpDto } from './dto/signup.dto';
-import { LoginDto } from './dto/login.dto';
-import { TokenData } from './types/auth.type';
 
 @Injectable()
 export class AuthService {
@@ -21,8 +14,8 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async signUp(signUpDto: SignUpDto): Promise<{ token: string; user: User }> {
-    const { name, email, password } = signUpDto;
+  async createUser(userData: SignUpDto): Promise<User> {
+    const { name, email, password } = userData;
 
     try {
       const user = await this.userModel.create({
@@ -31,34 +24,12 @@ export class AuthService {
         password,
       });
 
-      const token = this.jwtService.sign({ id: user._id });
-
-      return { user, token };
+      return user;
     } catch (error) {
       if (error?.code === 11000) {
         throw new ConflictException('Duplicated Email Entered');
       }
     }
-  }
-
-  async login(loginDto: LoginDto): Promise<{ user: User; token: string }> {
-    const { email, password } = loginDto;
-
-    const user = await this.userModel.findOne({ email });
-
-    if (!user) {
-      throw new UnauthorizedException('Invalid email or password');
-    }
-
-    const isPasswordMatched = await bcrypt.compare(password, user.password);
-
-    if (!isPasswordMatched) {
-      throw new UnauthorizedException('Invalid email or password');
-    }
-
-    const token = this.jwtService.sign({ id: user._id });
-
-    return { user, token };
   }
 
   async getOneUser(query: FilterQuery<User>): Promise<User> {
@@ -68,6 +39,10 @@ export class AuthService {
 
   createCookie(token: string): string {
     return `Authorization=${token}; SameSite=None; Secure; HttpOnly;  Domain=${process.env.MAIN_DOMAIN}; Path=/; Max-Age=${process.env.JWT_EXPIRES};`;
+  }
+
+  generateToken(tokenData: { id: string }): string {
+    return this.jwtService.sign(tokenData);
   }
 
   validateToken(token: string) {
